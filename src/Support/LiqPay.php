@@ -37,28 +37,29 @@ class LiqPay
     const CURRENCY_RUB = 'RUB';
     const CURRENCY_RUR = 'RUR';
 
+    private array $_supportedCurrencies = [
+        self::CURRENCY_EUR,
+        self::CURRENCY_USD,
+        self::CURRENCY_UAH,
+        self::CURRENCY_RUB,
+        self::CURRENCY_RUR,
+    ];
+
     /**
      * Constructor.
      *
-     * @param string $public_key
-     * @param string $private_key
-     * @param string|null $api_url (optional)
-     *
-     * @throws InvalidArgumentException
+     * @param  string  $_checkout_url
+     * @param  string|null  $_server_response_code
+     * @param  string  $public_key
+     * @param  string  $private_key
+     * @param  string|NULL  $api_url  (optional)
      */
     public function __construct(
-        string $_checkout_url = 'https://www.liqpay.ua/api/3/checkout',
-        string|NULL $_server_response_code = null,
-        string $_supportedCurrencies = array(
-            self::CURRENCY_EUR,
-            self::CURRENCY_USD,
-            self::CURRENCY_UAH,
-            self::CURRENCY_RUB,
-            self::CURRENCY_RUR,
-        ),
+        private string $_checkout_url = 'https://www.liqpay.ua/api/3/checkout',
+        private ?string $_server_response_code = null,
         string $public_key = '',
         string $private_key = '',
-        string|NULL $api_url = 'https://www.liqpay.ua/ru/checkout/card/sandbox_i35444360364'
+        string|null $api_url = 'https://www.liqpay.ua/ru/checkout/card/sandbox_i35444360364'
     ) {
         if (null === $public_key) {
             die('public_key is empty');
@@ -79,9 +80,9 @@ class LiqPay
     /**
      * Call API
      *
-     * @param string $path
-     * @param array $params
-     * @param int $timeout
+     * @param  string  $path
+     * @param  array  $params
+     * @param  int  $timeout
      *
      * @return string
      */
@@ -93,22 +94,34 @@ class LiqPay
         if (!isset($params['version'])) {
             throw new InvalidArgumentException('version is null');
         }
-        $url         = $this->_api_url . $path;
-        $public_key  = $this->_public_key;
+        $url = $this->_api_url.$path;
+        $public_key = $this->_public_key;
         $private_key = $this->_private_key;
-        $data        = $this->encode_params(array_merge(compact('public_key'), $params));
-        $signature   = $this->str_to_sign($private_key . $data . $private_key);
-        $postfields  = http_build_query(array(
-            'data'  => $data,
+        $data = $this->encode_params(array_merge(compact('public_key'), $params));
+        $signature = $this->str_to_sign($private_key.$data.$private_key);
+        $postfields = http_build_query(array(
+            'data' => $data,
             'signature' => $signature
         ));
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true); // Avoid MITM vulnerability http://phpsecurity.readthedocs.io/en/latest/Input-Validation.html#validation-of-input-sources
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);    // Check the existence of a common name and also verify that it matches the hostname provided
+        curl_setopt(
+            $ch,
+            CURLOPT_SSL_VERIFYPEER,
+            true
+        ); // Avoid MITM vulnerability http://phpsecurity.readthedocs.io/en/latest/Input-Validation.html#validation-of-input-sources
+        curl_setopt(
+            $ch,
+            CURLOPT_SSL_VERIFYHOST,
+            2
+        );    // Check the existence of a common name and also verify that it matches the hostname provided
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);   // The number of seconds to wait while trying to connect
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);          // The maximum number of seconds to allow cURL functions to execute
+        curl_setopt(
+            $ch,
+            CURLOPT_TIMEOUT,
+            $timeout
+        );          // The maximum number of seconds to allow cURL functions to execute
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -116,6 +129,31 @@ class LiqPay
         $this->_server_response_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         return json_decode($server_output);
+    }
+
+    /**
+     * encode_params
+     *
+     * @param  array  $params
+     * @return string
+     */
+    private function encode_params(array $params): string
+    {
+        return base64_encode(json_encode($params));
+    }
+
+    /**
+     * str_to_sign
+     *
+     * @param  string  $str
+     *
+     * @return string
+     */
+    public function str_to_sign(string $str): string
+    {
+        $signature = base64_encode(sha1($str, 1));
+
+        return $signature;
     }
 
     /**
@@ -131,7 +169,7 @@ class LiqPay
     /**
      * cnb_form
      *
-     * @param array $params
+     * @param  array  $params
      *
      * @return string
      *
@@ -144,8 +182,8 @@ class LiqPay
             $language = 'en';
         }
 
-        $params    = $this->cnb_params($params);
-        $data      = $this->encode_params($params);
+        $params = $this->cnb_params($params);
+        $data = $this->encode_params($params);
         $signature = $this->cnb_signature($params);
 
         return sprintf(
@@ -164,44 +202,9 @@ class LiqPay
     }
 
     /**
-     * cnb_form raw data for custom form
-     *
-     * @param $params
-     * @return array
-     */
-    public function cnb_form_raw($params): array
-    {
-        $params = $this->cnb_params($params);
-
-        return array(
-            'url'       => $this->_checkout_url,
-            'data'      => $this->encode_params($params),
-            'signature' => $this->cnb_signature($params)
-        );
-    }
-
-    /**
-     * cnb_signature
-     *
-     * @param array $params
-     *
-     * @return string
-     */
-    public function cnb_signature(array $params): string
-    {
-        $params      = $this->cnb_params($params);
-        $private_key = $this->_private_key;
-
-        $json      = $this->encode_params($params);
-        $signature = $this->str_to_sign($private_key . $json . $private_key);
-
-        return $signature;
-    }
-
-    /**
      * cnb_params
      *
-     * @param array $params
+     * @param  array  $params
      *
      * @return array $params
      */
@@ -232,38 +235,48 @@ class LiqPay
     }
 
     /**
-     * encode_params
+     * cnb_signature
      *
-     * @param array $params
+     * @param  array  $params
+     *
      * @return string
      */
-    private function encode_params(array $params): string
+    public function cnb_signature(array $params): string
     {
-        return base64_encode(json_encode($params));
+        $params = $this->cnb_params($params);
+        $private_key = $this->_private_key;
+
+        $json = $this->encode_params($params);
+        $signature = $this->str_to_sign($private_key.$json.$private_key);
+
+        return $signature;
+    }
+
+    /**
+     * cnb_form raw data for custom form
+     *
+     * @param $params
+     * @return array
+     */
+    public function cnb_form_raw($params): array
+    {
+        $params = $this->cnb_params($params);
+
+        return array(
+            'url' => $this->_checkout_url,
+            'data' => $this->encode_params($params),
+            'signature' => $this->cnb_signature($params)
+        );
     }
 
     /**
      * decode_params
      *
-     * @param string $params
+     * @param  string  $params
      * @return array
      */
     public function decode_params(string $params): array
     {
         return json_decode(base64_decode($params), true);
-    }
-
-    /**
-     * str_to_sign
-     *
-     * @param string $str
-     *
-     * @return string
-     */
-    public function str_to_sign(string $str): string
-    {
-        $signature = base64_encode(sha1($str, 1));
-
-        return $signature;
     }
 }

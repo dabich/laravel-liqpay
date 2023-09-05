@@ -10,7 +10,7 @@ class LiqPay
 
     public function __construct()
     {
-    	$this->client = new AbstractLiqPay(config('liqpay.public_key'), config('liqpay.private_key'));
+    	$this->client = new AbstractLiqPay(public_key: config('liqpay.public_key'), private_key: config('liqpay.private_key'));
     }
 
     public function pay(
