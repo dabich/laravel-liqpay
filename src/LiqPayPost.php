@@ -93,7 +93,7 @@ class LiqPayPost
             ],
         ); 
 
-        $liqPayClient = new AbstractLiqPay($result_url, null, $data, $public_key, $private_key);
+        $liqPayClient = new AbstractLiqPay(_checkout_url: $result_url, public_key: $public_key, private_key: $private_key);
         header('Location:'.$liqPayClient->_api_url);
     }
 
